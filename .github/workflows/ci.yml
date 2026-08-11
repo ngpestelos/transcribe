@@ -32,6 +32,8 @@ jobs:
       - name: Install package (no heavy runtime deps)
         # mlx-whisper pulls torch/mlx and is Apple Silicon–oriented.
         # Unit tests only need the package + pytest (pipeline shells out to mlx_whisper).
+        # See the mlx-smoke job below for the job that actually installs and
+        # imports mlx_whisper on a real Apple Silicon runner.
         run: |
           uv venv .venv --python ${{ matrix.python-version }}
           source .venv/bin/activate
@@ -75,6 +77,33 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
+
+  mlx-smoke-trial:
+    name: mlx-smoke TRIAL (probe only, not wired to ci-success yet)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install package with mlx-whisper
+        run: |
+          uv venv .venv --python 3.12
+          source .venv/bin/activate
+          uv pip install -e .
+
+      - name: mlx_whisper import + CLI smoke
+        run: |
+          source .venv/bin/activate
+          python -c "import mlx_whisper; print('mlx_whisper import OK:', getattr(mlx_whisper, '__version__', 'unknown'))"
+          mlx_whisper --help >/dev/null
+          echo "mlx_whisper CLI OK"
 
   # Single required check for branch protection + Dependabot auto-merge.
   ci-success:
