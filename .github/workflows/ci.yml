@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install package (no heavy runtime deps)
+        # mlx-whisper pulls torch/mlx and is Apple Silicon–oriented.
+        # Unit tests only need the package + pytest (pipeline shells out to mlx_whisper).
+        run: |
+          uv venv .venv --python ${{ matrix.python-version }}
+          source .venv/bin/activate
+          uv pip install -e ".[dev]" --no-deps
+          uv pip install pytest
+
+      - name: Test
+        run: |
+          source .venv/bin/activate
+          pytest -q
+
+      - name: CLI smoke (no Apple Silicon / no model)
+        run: |
+          source .venv/bin/activate
+          transcribe --version
+          # --check must fail off macOS arm64; assert the hard gate works
+          if transcribe --check; then
+            echo "expected --check to fail on ubuntu" >&2
+            exit 1
+          fi
+
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build sdist and wheel
+        run: |
+          uv python install 3.11
+          uv build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # Single required check for branch protection + Dependabot auto-merge.
+  ci-success:
+    name: ci-success
+    if: always()
+    needs: [test, package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All jobs green
+        run: |
+          test "${{ needs.test.result }}" = "success"
+          test "${{ needs.package.result }}" = "success"

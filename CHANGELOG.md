@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- GitHub Actions CI: unit tests on Python 3.11–3.13 (without installing mlx/torch), package build, `ci-success` gate.
+- Dependabot for `pip` and `github-actions` (weekly), with squash auto-merge after CI green.
+
 ### Changed
 
 ### Fixed

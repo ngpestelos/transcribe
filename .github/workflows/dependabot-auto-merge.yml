@@ -1,0 +1,33 @@
+name: Dependabot auto-merge
+
+# Enables auto-merge on Dependabot PRs. Branch protection on `main` still
+# gates the merge: the PR only lands once required CI checks pass and the
+# branch is up to date. A bump that breaks CI stays open.
+#
+# Hold major bumps for manual review: add
+#   && steps.meta.outputs.update-type != 'version-update:semver-major'
+# to the Enable auto-merge step condition if you want that gate.
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge (squash)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

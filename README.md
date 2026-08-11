@@ -1,5 +1,7 @@
 # transcribe
 
+[![CI](https://github.com/ngpestelos/transcribe/actions/workflows/ci.yml/badge.svg)](https://github.com/ngpestelos/transcribe/actions/workflows/ci.yml)
+
 Local lecture/video speech-to-text CLI for **Apple Silicon**.
 
 Wraps `ffmpeg` + [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper) into one command that writes searchable markdown (`[HH:MM:SS]` lines), SRT/VTT for players, and JSON for reprocessing.
@@ -116,6 +118,12 @@ uv pip install -e ".[dev]"
 pytest -q
 transcribe --check
 ```
+
+### CI and Dependabot
+
+- **CI** (`.github/workflows/ci.yml`): unit tests on Python 3.11–3.13 (no mlx/torch install — those are runtime Mac deps), plus sdist/wheel build. Gate job: `ci-success`.
+- **Dependabot** (weekly): `pip` and `github-actions`.
+- **Auto-merge**: Dependabot PRs enable squash auto-merge; they land only after `ci-success` is green and `main` is up to date (branch protection).
 
 ## Changelog
 
