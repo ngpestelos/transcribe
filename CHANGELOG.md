@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.1.1] — 2026-08-11
+
+### Fixed
+
+- Resolve `mlx_whisper` from the same environment as the `transcribe` binary (sibling of `sys.executable`). `uv tool install` only links `transcribe` onto `PATH`, so the previous PATH/`python -m` fallback failed on a clean tool install.
+
 ## [0.1.0] — 2026-08-11
 
 ### Added
@@ -26,5 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-file invocation: `transcribe a.mp4 b.mp4`.
 - Install via `uv tool install` / editable install; console script entry point `transcribe`.
 
-[Unreleased]: https://github.com/ngpestelos/transcribe/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ngpestelos/transcribe/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ngpestelos/transcribe/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ngpestelos/transcribe/releases/tag/v0.1.0

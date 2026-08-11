@@ -111,6 +111,30 @@ def extract_audio(source: Path, audio_path: Path) -> None:
         raise TranscribeError(f"ffmpeg extract failed:\n{err}") from exc
 
 
+def resolve_mlx_whisper() -> list[str]:
+    """Return argv prefix that runs the mlx_whisper CLI.
+
+    Prefer the console script next to ``sys.executable`` (uv tool / venv installs
+    put ``transcribe`` on PATH but not always ``mlx_whisper``). Fall back to PATH,
+    then to ``mlx_whisper.cli:main`` via the same interpreter.
+    """
+    sibling = Path(sys.executable).resolve().parent / "mlx_whisper"
+    if sibling.is_file():
+        return [str(sibling)]
+    on_path = shutil.which("mlx_whisper")
+    if on_path:
+        return [on_path]
+    # Library present but no console script on PATH (e.g. stripped tool env)
+    return [
+        sys.executable,
+        "-c",
+        (
+            "import sys; from mlx_whisper.cli import main; "
+            "sys.argv = ['mlx_whisper'] + sys.argv[1:]; main()"
+        ),
+    ]
+
+
 def run_mlx_whisper(
     audio_path: Path,
     *,
@@ -121,14 +145,7 @@ def run_mlx_whisper(
     initial_prompt: str | None,
 ) -> None:
     """Invoke mlx_whisper CLI (same flags as the proven spike)."""
-    mlx = shutil.which("mlx_whisper")
-    cmd: list[str]
-    if mlx:
-        cmd = [mlx]
-    else:
-        # Fallback: module entry when installed as a library only
-        cmd = [sys.executable, "-m", "mlx_whisper"]
-
+    cmd = resolve_mlx_whisper()
     cmd.extend(
         [
             str(audio_path),
@@ -155,8 +172,8 @@ def run_mlx_whisper(
         subprocess.run(cmd, check=True)
     except FileNotFoundError as exc:
         raise TranscribeError(
-            "mlx_whisper not found. Install with: uv tool install lecture-transcribe "
-            "(or pip install mlx-whisper)."
+            "mlx_whisper not found. Reinstall with: "
+            "uv tool install git+https://github.com/ngpestelos/transcribe"
         ) from exc
     except subprocess.CalledProcessError as exc:
         raise TranscribeError(
@@ -182,11 +199,8 @@ def check_environment(*, min_gb: float = MIN_FREE_GB) -> list[str]:
     for name in ("ffmpeg", "ffprobe"):
         p = require_bin(name)
         lines.append(f"{name}: {p}")
-    mlx = shutil.which("mlx_whisper")
-    if mlx:
-        lines.append(f"mlx_whisper: {mlx}")
-    else:
-        lines.append("mlx_whisper: not on PATH (will use python -m mlx_whisper)")
+    mlx_cmd = resolve_mlx_whisper()
+    lines.append(f"mlx_whisper: {' '.join(mlx_cmd)}")
     free = disk_gate(min_gb=min_gb)
     lines.append(f"free disk: {free:.1f} GB (min {min_gb:.1f})")
     hf = Path.home() / ".cache" / "huggingface"
