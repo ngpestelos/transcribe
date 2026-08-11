@@ -98,8 +98,17 @@ jobs:
   mlx-smoke:
     name: mlx-smoke (macOS arm64)
     runs-on: macos-15
+    # Explicit read-only, even though it's already inherited from the
+    # top-level `permissions:` block: this job runs real import-time code
+    # from a Dependabot-controlled mlx-whisper release, so its isolation
+    # from the write-scoped dependabot-auto-merge.yml workflow (separate
+    # file, separate token) should be self-evident to future editors.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
