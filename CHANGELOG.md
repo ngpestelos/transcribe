@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.1.2] — 2026-08-11
+
+### Fixed
+
+- Find `mlx_whisper` beside the venv `python` without `Path.resolve()` on `sys.executable` (uv/venv pythons symlink into Homebrew/system; resolve jumped out of the tool env). Prefer the real sibling console script over the `-c` fallback.
+
 ## [0.1.1] — 2026-08-11
 
 ### Fixed
@@ -32,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-file invocation: `transcribe a.mp4 b.mp4`.
 - Install via `uv tool install` / editable install; console script entry point `transcribe`.
 
-[Unreleased]: https://github.com/ngpestelos/transcribe/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/ngpestelos/transcribe/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/ngpestelos/transcribe/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ngpestelos/transcribe/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ngpestelos/transcribe/releases/tag/v0.1.0

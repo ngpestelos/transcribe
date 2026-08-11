@@ -118,7 +118,10 @@ def resolve_mlx_whisper() -> list[str]:
     put ``transcribe`` on PATH but not always ``mlx_whisper``). Fall back to PATH,
     then to ``mlx_whisper.cli:main`` via the same interpreter.
     """
-    sibling = Path(sys.executable).resolve().parent / "mlx_whisper"
+    # Do not Path.resolve() sys.executable — uv/venv pythons are often symlinks
+    # into the system interpreter; resolve() leaves the venv bin/ directory.
+    exe_dir = Path(sys.executable).parent
+    sibling = exe_dir / "mlx_whisper"
     if sibling.is_file():
         return [str(sibling)]
     on_path = shutil.which("mlx_whisper")
