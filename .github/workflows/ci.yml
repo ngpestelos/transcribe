@@ -78,8 +78,25 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  mlx-smoke-trial:
-    name: mlx-smoke TRIAL (probe only, not wired to ci-success yet)
+  # Real Apple-Silicon canary for the repo's only direct (and only
+  # untrusted-native-code) dependency. Proves a just-bumped mlx-whisper
+  # release still installs and its CLI resolves/runs — the exact path
+  # pipeline.py's resolve_mlx_whisper()/run_mlx_whisper() use at runtime —
+  # before that bump can reach ci-success. One Python version is enough;
+  # this is a canary, not full matrix coverage. No model download/inference:
+  # `--help` proves import + CLI wiring without touching a model.
+  #
+  # runs-on is pinned to macos-15, not macos-14: macos-14 begins deprecation
+  # 2026-07-06 and is fully retired 2026-11-02 (actions/runner-images#13518).
+  # Empirically verified 2026-08-11 on a real macos-15 GitHub-hosted runner
+  # (run 31543457099): mlx_whisper 0.4.3 imports and its CLI runs cleanly —
+  # the standard runner does NOT hit the Metal-init crash some no-GPU/
+  # virtualized environments hit (ml-explore/mlx#3148). Re-verify if this job
+  # ever starts failing across-the-board (all Dependabot AND non-Dependabot
+  # runs) — that pattern means the runner environment changed, not that a
+  # bump is bad.
+  mlx-smoke:
+    name: mlx-smoke (macOS arm64)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
@@ -109,10 +126,11 @@ jobs:
   ci-success:
     name: ci-success
     if: always()
-    needs: [test, package]
+    needs: [test, package, mlx-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: All jobs green
         run: |
           test "${{ needs.test.result }}" = "success"
           test "${{ needs.package.result }}" = "success"
+          test "${{ needs.mlx-smoke.result }}" = "success"

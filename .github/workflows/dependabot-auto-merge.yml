@@ -4,6 +4,12 @@ name: Dependabot auto-merge
 # gates the merge: the PR only lands once required CI checks pass and the
 # branch is up to date. A bump that breaks CI stays open.
 #
+# mlx-whisper is excluded below (never auto-merged): it's the repo's only
+# direct dependency and the sole component that executes untrusted native/
+# model-loading code. Grouping in dependabot.yml does NOT gate this — this
+# job auto-merges every Dependabot PR regardless of group, so the exclusion
+# has to live here, on the actual merge step. See ngpestelos/transcribe#6.
+#
 # Hold major bumps for manual review: add
 #   && steps.meta.outputs.update-type != 'version-update:semver-major'
 # to the Enable auto-merge step condition if you want that gate.
@@ -27,6 +33,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Enable auto-merge (squash)
+        if: ${{ !contains(steps.meta.outputs.dependency-names, 'mlx-whisper') }}
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
