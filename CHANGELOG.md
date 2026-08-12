@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.1.3] — 2026-08-12
+
+### Added
+
 - GitHub Actions CI: unit tests on Python 3.11–3.13 (without installing mlx/torch), package build, `ci-success` gate.
 - Dependabot for `pip` and `github-actions` (weekly), with squash auto-merge after CI green.
 - `mlx-smoke` CI job (macOS arm64): installs and imports `mlx-whisper` for real on every PR/push, gating `ci-success`. Closes the gap where CI never installed the repo's only dependency (#6).
@@ -16,8 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Dependabot auto-merge no longer applies to `mlx-whisper` bumps — they always need a human look now, since it's the one dependency executing untrusted native/model-loading code (#6).
-
-### Fixed
 
 ## [0.1.2] — 2026-08-11
 
