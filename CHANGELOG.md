@@ -11,7 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Skip only unchanged completed sets that match the source. Legacy and incomplete outputs require `--force`.
+- Retain normalized audio at `<base>.audio.m4a`; preserve original recordings.
+
 ### Fixed
+
+- Reject source/output aliases, path components in names and collisions between different sources (#8, #10).
+- Preserve dotted output basenames through fixed backend staging names (#10).
+- Validate fresh outputs before publication. Restore previous outputs on detected publication errors; retain recovery backups if restoration fails (#9).
+- Probe the resolved backend with `--help` during `--check` (#11).
+- Report malformed transcripts and filesystem failures per source while continuing batches (#12).
+- Build package metadata from the CLI's version declaration (#13).
 
 ## [0.1.3] — 2026-08-12
 

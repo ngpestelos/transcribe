@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--force",
         action="store_true",
-        help="Rebuild even when .md and .srt already exist",
+        help="Rebuild existing or unverified outputs",
     )
     p.add_argument(
         "--model",
@@ -72,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--keep-audio",
         action="store_true",
-        help="Keep extracted mono AAC next to outputs",
+        help="Keep normalized AAC as <base>.audio.m4a",
     )
     p.add_argument(
         "--check",
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.sources:
             parser.error("provide at least one source file, or use --check")
 
-        if args.name and len(args.sources) > 1:
+        if args.name is not None and len(args.sources) > 1:
             parser.error("--name requires a single source file")
 
         exit_code = 0
@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             if result.skipped:
                 print(
                     f"skip: {result.source.name} "
-                    f"(exists: {result.md_path} + {result.srt_path})"
+                    f"(verified outputs: {result.md_path} + {result.srt_path})"
                 )
             else:
                 print(f"done: {result.source.name}")

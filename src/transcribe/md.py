@@ -3,8 +3,42 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
+
+
+class TranscriptValidationError(ValueError):
+    """Expected malformed transcript data."""
+
+
+def validate_transcript(data: Any) -> None:
+    """Validate fields used by the renderer; empty segments represent silence."""
+    if not isinstance(data, dict) or not isinstance(data.get("segments"), list):
+        raise TranscriptValidationError("JSON must contain a segments list")
+
+    def timestamp(value: Any, field: str) -> None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TranscriptValidationError(f"{field} must be a finite nonnegative number")
+        try:
+            valid = math.isfinite(value) and value >= 0
+        except OverflowError:
+            valid = False
+        if not valid:
+            raise TranscriptValidationError(f"{field} must be a finite nonnegative number")
+
+    if "duration" in data:
+        timestamp(data["duration"], "duration")
+    for field in ("text", "language"):
+        if field in data and not isinstance(data[field], str):
+            raise TranscriptValidationError(f"{field} must be a string")
+    for index, segment in enumerate(data["segments"]):
+        if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
+            raise TranscriptValidationError(f"segment {index} must contain string text")
+        for field in ("start", "end"):
+            timestamp(segment.get(field), f"segment {index} {field}")
+        if segment["end"] < segment["start"]:
+            raise TranscriptValidationError(f"segment {index} end precedes start")
 
 
 def format_ts(seconds: float | int | None) -> str:
@@ -32,6 +66,7 @@ def json_to_markdown(
     model: str,
 ) -> str:
     """Render [HH:MM:SS] line transcript with a short header."""
+    validate_transcript(data)
     dur_s = duration_seconds(data)
     lines = [
         f"# Transcript — {source_name}",

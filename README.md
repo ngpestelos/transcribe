@@ -49,7 +49,7 @@ transcribe lecture.mp4 --prompt "Lecture: markets, volume buzz, relative momentu
 # rebuild even if outputs exist
 transcribe lecture.mp4 --force
 
-# several files (skips any that already have .md + .srt)
+# several files (skips verified completed output sets)
 transcribe part1.mp4 part2.mp4 -o ./out
 ```
 
@@ -58,14 +58,14 @@ transcribe part1.mp4 part2.mp4 -o ./out
 | Flag | Meaning |
 |------|---------|
 | `-o`, `--out DIR` | Output directory (default: source directory) |
-| `--force` | Rebuild even when `.md` and `.srt` exist |
+| `--force` | Rebuild existing or unverified outputs |
 | `--model ID` | mlx-whisper model (default: `mlx-community/whisper-large-v3-turbo`) |
 | `--language CODE` | Language code (default: `en`) |
 | `--prompt TEXT` | `initial_prompt` for jargon / proper nouns |
-| `--name BASE` | Output basename (single file only) |
+| `--name BASE` | Single basename; spaces, Unicode and dots are supported |
 | `--min-free-gb N` | Disk gate (default: `5`) |
-| `--keep-audio` | Keep extracted mono AAC beside outputs |
-| `--check` | Verify arch, ffmpeg, disk, mlx_whisper |
+| `--keep-audio` | Keep normalized AAC as `<base>.audio.m4a` |
+| `--check` | Verify arch, ffmpeg, disk and backend startup with `--help` |
 | `-V`, `--version` | Print version |
 
 ### Outputs
@@ -76,15 +76,32 @@ transcribe part1.mp4 part2.mp4 -o ./out
 | `.srt` / `.vtt` | Video players |
 | `.json` | Segments for reformat / reprocess |
 | `.txt` / `.tsv` | Plain / tabular (from mlx-whisper) |
+| `.audio.m4a` | Normalized audio, when `--keep-audio` is used |
+| `.complete.json` | Source identity and hashes of the completed artifacts |
+| `.lock` | Persistent file lock for writers sharing this basename |
 
-**Skip rule:** if both `.md` and `.srt` already exist for the basename, the file is skipped unless `--force`.
+**Skip rule:** a matching source and unchanged completed output set are skipped unless `--force`.
+Older outputs without a completion record, changed files and incomplete sets require `--force`.
+Requesting `--keep-audio` requires that the completed set contains retained audio.
+
+Different sources sharing a basename in one destination are refused, including with `--force`.
+Choose a different `--name` or `--out` directory. Names with path components are rejected.
+Any output or sidecar that aliases the source recording is rejected before it is opened for writing.
 
 ## How it works
 
 1. Refuse to run off Apple Silicon or with less than ~5 GB free disk.
-2. Extract mono 16 kHz AAC with ffmpeg (small; not full WAV).
-3. Run mlx-whisper with a pinned default model.
-4. Build a markdown transcript from the JSON segments.
+2. Lock the destination basename and stage mono 16 kHz AAC on that filesystem.
+3. Run mlx-whisper in staging and validate its JSON, captions and tabular output.
+4. Render Markdown, publish the output set and write its completion record last.
+
+Failed reruns preserve the previous completed set. Detected publication errors trigger a rollback.
+If rollback fails, the error names the recovery directory and completion is invalidated.
+Keep that directory until you have recovered its files. Publication across flat files is not atomic
+and does not guarantee durability after power loss.
+
+Expected JSON and filesystem failures are reported per source. Later files in a batch continue;
+any failed source makes the command exit nonzero. Empty segments are valid for silent recordings.
 
 First run downloads the model into the Hugging Face cache (`~/.cache/huggingface` by default, overridable with `HF_HOME`). That needs network once; later runs are local.
 
