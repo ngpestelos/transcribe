@@ -12,7 +12,10 @@ from transcribe.pipeline import (
     DEFAULT_MODEL,
     MIN_FREE_GB,
     TranscribeError,
+    artifact_paths,
     check_environment,
+    reject_source_aliases,
+    resolve_base,
     transcribe_file,
 )
 
@@ -41,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--force",
         action="store_true",
-        help="Rebuild even when .md and .srt already exist",
+        help="Rebuild existing or unverified outputs",
     )
     p.add_argument(
         "--model",
@@ -72,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--keep-audio",
         action="store_true",
-        help="Keep extracted mono AAC next to outputs",
+        help="Keep normalized AAC as <base>.audio.m4a",
     )
     p.add_argument(
         "--check",
@@ -102,12 +105,22 @@ def main(argv: list[str] | None = None) -> int:
         if not args.sources:
             parser.error("provide at least one source file, or use --check")
 
-        if args.name and len(args.sources) > 1:
+        if args.name is not None and len(args.sources) > 1:
             parser.error("--name requires a single source file")
 
         exit_code = 0
         for source in args.sources:
             try:
+                resolved_source = source.expanduser().resolve()
+                base = resolve_base(resolved_source, args.name)
+                dest = (args.out or resolved_source.parent).expanduser().resolve()
+                prospective = [
+                    *artifact_paths(dest, base).values(),
+                    dest / f"{base}.complete.json",
+                    dest / f"{base}.lock",
+                ]
+                for named_source in args.sources:
+                    reject_source_aliases(named_source.expanduser().resolve(), prospective)
                 result = transcribe_file(
                     source,
                     out_dir=args.out,
@@ -119,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
                     min_free_gb=args.min_free_gb,
                     keep_audio=args.keep_audio,
                 )
-            except TranscribeError as exc:
+            except (TranscribeError, OSError) as exc:
                 print(f"error: {source}: {exc}", file=sys.stderr)
                 exit_code = 1
                 continue
@@ -127,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             if result.skipped:
                 print(
                     f"skip: {result.source.name} "
-                    f"(exists: {result.md_path} + {result.srt_path})"
+                    f"(verified outputs: {result.md_path} + {result.srt_path})"
                 )
             else:
                 print(f"done: {result.source.name}")
