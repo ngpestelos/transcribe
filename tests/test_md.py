@@ -49,6 +49,9 @@ def test_json_to_markdown_lines():
     {"segments": [{"start": 2, "end": 1, "text": "hello"}]},
     {"duration": float("nan"), "segments": []},
     {"duration": 10 ** 400, "segments": []},
+    {"duration": -1, "segments": []},
+    {"duration": True, "segments": []},
+    {"duration": "1", "segments": []},
 ])
 def test_invalid_transcript_rejected_before_rendering(data):
     with pytest.raises(ValueError):
@@ -57,3 +60,8 @@ def test_invalid_transcript_rejected_before_rendering(data):
 
 def test_silence_is_valid():
     assert "00:00:00" in json_to_markdown({"segments": []}, source_name="silent.mp4", model="test")
+
+
+def test_null_optional_duration_matches_absent_duration():
+    data = {"segments": [{"start": 0, "end": 65, "text": "hello"}]}
+    assert json_to_markdown({**data, "duration": None}, source_name="talk.mp4", model="test") == json_to_markdown(data, source_name="talk.mp4", model="test")

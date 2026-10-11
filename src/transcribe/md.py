@@ -27,7 +27,7 @@ def validate_transcript(data: Any) -> None:
         if not valid:
             raise TranscriptValidationError(f"{field} must be a finite nonnegative number")
 
-    if "duration" in data:
+    if data.get("duration") is not None:
         timestamp(data["duration"], "duration")
     for field in ("text", "language"):
         if field in data and not isinstance(data[field], str):

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
 import json
 import os
 import platform
@@ -172,30 +170,58 @@ def validate_backend_outputs(stage: Path) -> None:
     if has_speech and (not contents["srt"].strip() or not contents["txt"].strip()):
         raise TranscribeError("Incomplete caption or text output from mlx_whisper")
 
-    cue = re.compile(r"(?:\d+:)?\d{2}:\d{2}[.,]\d{3} --> (?:\d+:)?\d{2}:\d{2}[.,]\d{3}")
-    for block in re.split(r"\n\s*\n", contents["srt"].strip()):
-        if not block:
-            continue
-        lines = block.splitlines()
-        if len(lines) < 2 or not lines[0].isdigit() or not cue.fullmatch(lines[1]):
-            raise TranscribeError("Invalid SRT output from mlx_whisper")
+    def caption_time(value: str) -> int:
+        match = re.fullmatch(r"(?:(\d+):)?([0-5]\d):([0-5]\d)[.,](\d{3})", value)
+        if not match:
+            raise TranscribeError("Invalid caption timestamp from mlx_whisper")
+        try:
+            hours, minutes, seconds, milliseconds = (int(part or 0) for part in match.groups())
+        except ValueError as exc:
+            raise TranscribeError("Invalid caption timestamp from mlx_whisper") from exc
+        return ((hours * 60 + minutes) * 60 + seconds) * 1000 + milliseconds
+
+    def captions(content: str, indexed: bool) -> None:
+        seen_cue = False
+        has_payload = False
+        for block in re.split(r"\n\s*\n", content.strip()):
+            if not block:
+                continue
+            lines = block.splitlines()
+            offset = 1 if indexed else 0
+            new_cue = not seen_cue or "-->" in lines[0] or (
+                indexed and len(lines) > 1 and "-->" in lines[1]
+            )
+            if new_cue:
+                if len(lines) <= offset or (indexed and not lines[0].isdigit()):
+                    raise TranscribeError("Invalid caption cue from mlx_whisper")
+                times = lines[offset].split(" --> ")
+                if len(times) != 2 or caption_time(times[1]) < caption_time(times[0]):
+                    raise TranscribeError("Invalid caption timing from mlx_whisper")
+                seen_cue = True
+                lines = lines[offset + 1:]
+            # Paragraphs inside multiline speech continue the preceding cue.
+            has_payload |= any(line.strip() for line in lines)
+        if has_speech and not has_payload:
+            raise TranscribeError("Incomplete caption speech output from mlx_whisper")
+
+    captions(contents["srt"], indexed=True)
     vtt = contents["vtt"].splitlines()
     if not vtt or vtt[0].strip() != "WEBVTT":
         raise TranscribeError("Invalid VTT output from mlx_whisper")
-    if has_speech and not "\n".join(vtt[1:]).strip():
-        raise TranscribeError("Incomplete VTT output from mlx_whisper")
-    for block in re.split(r"\n\s*\n", "\n".join(vtt[1:]).strip()):
-        if block and not cue.fullmatch(block.splitlines()[0]):
-            raise TranscribeError("Invalid VTT cue from mlx_whisper")
-    try:
-        rows = list(csv.reader(io.StringIO(contents["tsv"]), delimiter="\t"))
-    except csv.Error as exc:
-        raise TranscribeError(f"Invalid TSV output from mlx_whisper: {exc}") from exc
+    captions("\n".join(vtt[1:]), indexed=False)
+    # mlx-whisper prints literal text, rather than CSV-escaped fields.
+    rows = [line.split("\t", 2) for line in contents["tsv"].splitlines()]
     if not rows or rows[0] != ["start", "end", "text"]:
         raise TranscribeError("Invalid TSV header from mlx_whisper")
-    if has_speech and len(rows) == 1:
-        raise TranscribeError("Incomplete TSV output from mlx_whisper")
+    seen_row = False
+    has_tsv_payload = False
     for row in rows[1:]:
+        if row == [""]:
+            continue
+        if len(row) == 1 and seen_row:
+            # The backend writes embedded newlines in segment text literally.
+            has_tsv_payload |= bool(row[0].strip())
+            continue
         if len(row) != 3 or not row[0].isascii() or not row[1].isascii():
             raise TranscribeError("Invalid TSV row from mlx_whisper")
         try:
@@ -204,6 +230,10 @@ def validate_backend_outputs(stage: Path) -> None:
             valid = False
         if not valid:
             raise TranscribeError("Invalid TSV row from mlx_whisper")
+        seen_row = True
+        has_tsv_payload |= bool(row[2].strip())
+    if has_speech and not has_tsv_payload:
+        raise TranscribeError("Incomplete TSV speech output from mlx_whisper")
 
 
 def publish_outputs(stage: Path, paths: dict[str, Path], completion: Path, keep_audio: bool) -> None:

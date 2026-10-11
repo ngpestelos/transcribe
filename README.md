@@ -62,7 +62,7 @@ transcribe part1.mp4 part2.mp4 -o ./out
 | `--model ID` | mlx-whisper model (default: `mlx-community/whisper-large-v3-turbo`) |
 | `--language CODE` | Language code (default: `en`) |
 | `--prompt TEXT` | `initial_prompt` for jargon / proper nouns |
-| `--name BASE` | Single basename; spaces, Unicode and dots are supported |
+| `--name BASE` | Output basename (single source only); spaces, Unicode and dots are supported |
 | `--min-free-gb N` | Disk gate (default: `5`) |
 | `--keep-audio` | Keep normalized AAC as `<base>.audio.m4a` |
 | `--check` | Verify arch, ffmpeg, disk and backend startup with `--help` |
@@ -84,7 +84,7 @@ transcribe part1.mp4 part2.mp4 -o ./out
 Older outputs without a completion record, changed files and incomplete sets require `--force`.
 Requesting `--keep-audio` requires that the completed set contains retained audio.
 
-Different sources sharing a basename in one destination are refused, including with `--force`.
+A basename whose completion record names another source is refused, including with `--force`.
 Choose a different `--name` or `--out` directory. Names with path components are rejected.
 Any output or sidecar that aliases the source recording is rejected before it is opened for writing.
 
@@ -96,7 +96,8 @@ Any output or sidecar that aliases the source recording is rejected before it is
 4. Render Markdown, publish the output set and write its completion record last.
 
 Failed reruns preserve the previous completed set. Detected publication errors trigger a rollback.
-If rollback fails, the error names the recovery directory and completion is invalidated.
+If rollback fails, the error names the recovery directory. The command attempts to remove the
+completion record and reports any removal failure.
 Keep that directory until you have recovered its files. Publication across flat files is not atomic
 and does not guarantee durability after power loss.
 

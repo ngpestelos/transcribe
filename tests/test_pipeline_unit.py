@@ -372,3 +372,75 @@ def test_same_stem_writers_serialize_and_skip(tmp_path, backend, monkeypatch):
     assert not errors
     assert len(backend[1]) == 1
     assert sorted(result.skipped for result in results) == [False, True]
+
+
+@pytest.mark.parametrize("prior", [False, True])
+@pytest.mark.parametrize("suffix,content", [
+    ("srt", "1\n00:00:00,000 --> 00:00:01,000\n\n"),
+    ("vtt", "WEBVTT\n\n00:00.000 --> 00:01.000\n\n"),
+    ("tsv", "start\tend\ttext\n0\t1000\t \n"),
+    ("srt", "1\n00:99:00,000 --> 00:99:01,000\nhello\n\n"),
+    ("srt", "1\n00:00:99,000 --> 00:01:00,000\nhello\n\n"),
+    ("srt", "1\n00:00:02,000 --> 00:00:01,000\nhello\n\n"),
+    ("vtt", "WEBVTT\n\n99:00.000 --> 99:01.000\nhello\n\n"),
+    ("vtt", "WEBVTT\n\n00:99.000 --> 01:00.000\nhello\n\n"),
+    ("vtt", "WEBVTT\n\n00:02.000 --> 00:01.000\nhello\n\n"),
+])
+def test_caption_review_blockers_cannot_publish(tmp_path, backend, monkeypatch, suffix, content, prior):
+    source = source_file(tmp_path)
+    dest = tmp_path / "out"
+    if prior:
+        pipeline.transcribe_file(source, out_dir=dest)
+        before = output_bytes(dest)
+
+    def run(audio, *, out_dir, base, **kwargs):
+        backend[0](audio, out_dir=out_dir, base=base, **kwargs)
+        (out_dir / f"{base}.{suffix}").write_text(content)
+
+    monkeypatch.setattr(pipeline, "run_mlx_whisper", run)
+    with pytest.raises(TranscribeError):
+        pipeline.transcribe_file(source, out_dir=dest, force=prior)
+    if prior:
+        assert output_bytes(dest) == before
+        assert pipeline.transcribe_file(source, out_dir=dest).skipped
+    else:
+        for extension in (*pipeline.OUTPUT_SUFFIXES, "complete.json"):
+            assert not (dest / f"talk.{extension}").exists()
+
+
+def test_writer_multiline_quotes_blank_cues_long_hours_and_equal_times(tmp_path, backend, monkeypatch):
+    source = source_file(tmp_path)
+    text = '"Hello 世界"\nSecond line\n\nEnd'
+    data = {"segments": [
+        {"start": 0, "end": 0, "text": ""},
+        {"start": 360001, "end": 360001, "text": text},
+    ]}
+
+    def run(audio, *, out_dir, base, **kwargs):
+        contents = {
+            "json": json.dumps(data), "txt": text + "\n",
+            "srt": "1\n00:00:00,000 --> 00:00:00,000\n\n\n2\n100:00:01,000 --> 100:00:01,000\n" + text + "\n\n",
+            "vtt": "WEBVTT\n\n00:00.000 --> 00:00.000\n\n\n100:00:01.000 --> 100:00:01.000\n" + text + "\n\n",
+            "tsv": "start\tend\ttext\n0\t0\t\n360001000\t360001000\t" + text + "\n",
+        }
+        for suffix, content in contents.items():
+            (out_dir / f"{base}.{suffix}").write_text(content)
+
+    monkeypatch.setattr(pipeline, "run_mlx_whisper", run)
+    assert not pipeline.transcribe_file(source).skipped
+    assert text in (tmp_path / "talk.md").read_text()
+
+
+def test_null_duration_uses_segment_fallback_in_pipeline(tmp_path, backend, monkeypatch):
+    source = source_file(tmp_path)
+
+    def run(audio, *, out_dir, base, **kwargs):
+        backend[0](audio, out_dir=out_dir, base=base, **kwargs)
+        path = out_dir / f"{base}.json"
+        data = json.loads(path.read_text())
+        data["duration"] = None
+        path.write_text(json.dumps(data))
+
+    monkeypatch.setattr(pipeline, "run_mlx_whisper", run)
+    assert not pipeline.transcribe_file(source).skipped
+    assert "00:00:01" in (tmp_path / "talk.md").read_text()

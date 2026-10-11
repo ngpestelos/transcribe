@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Reject source/output aliases, path components in names and collisions between different sources (#8, #10).
+- Reject source/output aliases and path components in names. Refuse a basename whose completion record names another source (#8, #10).
 - Preserve dotted output basenames through fixed backend staging names (#10).
 - Validate fresh outputs before publication. Restore previous outputs on detected publication errors; retain recovery backups if restoration fails (#9).
 - Probe the resolved backend with `--help` during `--check` (#11).
