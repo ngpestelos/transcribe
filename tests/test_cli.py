@@ -51,3 +51,62 @@ def test_cli_and_build_version_agree(capsys):
         cli.main(["--version"])
     assert exc.value.code == 0
     assert capsys.readouterr().out.strip() == f"transcribe {__version__}"
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("keep_audio", [False, True])
+@pytest.mark.parametrize("force", [False, True])
+def test_batch_preserves_every_named_input(tmp_path, monkeypatch, capsys, reverse, keep_audio, force):
+    monkeypatch.setattr(pipeline, "require_apple_silicon", lambda: None)
+    monkeypatch.setattr(pipeline, "require_bin", lambda name: name)
+    monkeypatch.setattr(pipeline, "disk_gate", lambda **kwargs: 10)
+    monkeypatch.setattr(pipeline, "extract_audio", lambda source, target: target.write_bytes(b"normalized"))
+    video, audio = tmp_path / "talk.mp4", tmp_path / "talk.audio.m4a"
+    video.write_bytes(b"ORIGINAL VIDEO")
+    audio.write_bytes(b"ORIGINAL AUDIO")
+    attempted = []
+
+    def run(extracted, *, out_dir, base, **kwargs):
+        attempted.append(base)
+        contents = {
+            "json": '{"segments": []}', "srt": "", "txt": "",
+            "vtt": "WEBVTT\n\n", "tsv": "start\tend\ttext\n",
+        }
+        for suffix, text in contents.items():
+            (out_dir / f"{base}.{suffix}").write_text(text)
+
+    monkeypatch.setattr(pipeline, "run_mlx_whisper", run)
+    inputs = [audio, video] if reverse else [video, audio]
+    options = (["--keep-audio"] if keep_audio else []) + (["--force"] if force else [])
+    assert cli.main([*(str(source) for source in inputs), *options]) == 1
+    assert video.read_bytes() == b"ORIGINAL VIDEO"
+    assert audio.read_bytes() == b"ORIGINAL AUDIO"
+    captured = capsys.readouterr()
+    assert "aliases the source" in captured.err
+    assert "done: talk.audio.m4a" in captured.out
+    assert "done: talk.mp4" not in captured.out
+    assert len(attempted) == 1
+
+
+def test_missing_named_input_does_not_block_a_safe_completed_source(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(pipeline, "require_apple_silicon", lambda: None)
+    monkeypatch.setattr(pipeline, "require_bin", lambda name: name)
+    monkeypatch.setattr(pipeline, "disk_gate", lambda **kwargs: 10)
+    monkeypatch.setattr(pipeline, "extract_audio", lambda source, target: target.write_bytes(b"audio"))
+
+    def run(audio, *, out_dir, base, **kwargs):
+        for suffix, text in {
+            "json": '{"segments": []}', "srt": "", "txt": "",
+            "vtt": "WEBVTT\n\n", "tsv": "start\tend\ttext\n",
+        }.items():
+            (out_dir / f"{base}.{suffix}").write_text(text)
+
+    monkeypatch.setattr(pipeline, "run_mlx_whisper", run)
+    source = tmp_path / "safe.mp4"
+    source.write_bytes(b"original")
+    pipeline.transcribe_file(source)
+    assert cli.main([str(source), str(tmp_path / "missing.mp4")]) == 1
+    captured = capsys.readouterr()
+    assert "skip: safe.mp4" in captured.out
+    assert "missing.mp4" in captured.err
+    assert source.read_bytes() == b"original"

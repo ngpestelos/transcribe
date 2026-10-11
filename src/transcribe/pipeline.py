@@ -131,7 +131,7 @@ def reject_source_aliases(source: Path, paths: list[Path]) -> None:
     for path in paths:
         if (
             str(path.resolve()).casefold() == str(source).casefold()
-            or (path.exists() and path.samefile(source))
+            or (source.exists() and path.exists() and path.samefile(source))
         ):
             raise TranscribeError(f"Output path aliases the source recording: {path}")
 

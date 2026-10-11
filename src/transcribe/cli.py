@@ -12,7 +12,10 @@ from transcribe.pipeline import (
     DEFAULT_MODEL,
     MIN_FREE_GB,
     TranscribeError,
+    artifact_paths,
     check_environment,
+    reject_source_aliases,
+    resolve_base,
     transcribe_file,
 )
 
@@ -108,6 +111,16 @@ def main(argv: list[str] | None = None) -> int:
         exit_code = 0
         for source in args.sources:
             try:
+                resolved_source = source.expanduser().resolve()
+                base = resolve_base(resolved_source, args.name)
+                dest = (args.out or resolved_source.parent).expanduser().resolve()
+                prospective = [
+                    *artifact_paths(dest, base).values(),
+                    dest / f"{base}.complete.json",
+                    dest / f"{base}.lock",
+                ]
+                for named_source in args.sources:
+                    reject_source_aliases(named_source.expanduser().resolve(), prospective)
                 result = transcribe_file(
                     source,
                     out_dir=args.out,
@@ -119,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
                     min_free_gb=args.min_free_gb,
                     keep_audio=args.keep_audio,
                 )
-            except TranscribeError as exc:
+            except (TranscribeError, OSError) as exc:
                 print(f"error: {source}: {exc}", file=sys.stderr)
                 exit_code = 1
                 continue
